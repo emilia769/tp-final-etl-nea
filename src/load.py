@@ -62,7 +62,15 @@ def chequear_unicidad(filas):
     # TODO 9 --------------------------------------------------------------
     # Pista: es el patrón del set que viste en la Clase 3. Armá la lista de
     # claves (una tupla por fila) y compará len(lista) con len(set(lista)).
-    raise NotImplementedError("TODO 9: implementá chequear_unicidad()")
+    claves = []
+    for fila in filas:
+        claves.append((fila["provincia"], fila["destino"], fila["anio"]))
+
+    cant_duplicadas = len(claves) != len(set(claves))
+    if cant_duplicadas > 0:
+        return False, f"hay {cant_duplicadas} filas duplicadas en el dataset"
+
+    return True, "no hay filas duplicadas segun provincia, año y destino"
     # ---------------------------------------------------------------------
 
 
@@ -75,7 +83,16 @@ def chequear_rangos(filas):
     # TODO 10 -------------------------------------------------------------
     # Pista: una comprensión de lista con la condición al final te da
     # directamente las filas fuera de rango; después mirás cuántas son.
-    raise NotImplementedError("TODO 10: implementá chequear_rangos()")
+    filas_sospechosas = [
+        fila for fila in filas
+        if fila["valor_musd"] > config.VALOR_MAXIMO_RAZONABLE or fila["valor_musd"] < 0
+    ]
+
+    cant_sospechosas = len(filas_sospechosas)
+    if cant_sospechosas > 0:
+        return False, f"hay {cant_sospechosas} filas con valores fuera de rango o sospechosos"
+
+    return True, "todas las filas del dataset contienen valores realistas"
     # ---------------------------------------------------------------------
 
 
@@ -164,6 +181,7 @@ def construir_resumen(filas, detalle_checks):
         valor_musd         (dict) {"minimo":…, "maximo":…, "promedio":…}
         quality_checks     (list) el detalle_checks que recibís
     """
+
     # TODO 11 -------------------------------------------------------------
     # Pistas:
     #   - Para la lista de valores: [f["valor_musd"] for f in filas]
@@ -171,11 +189,36 @@ def construir_resumen(filas, detalle_checks):
     #   - Para provincias únicas y ordenadas: sorted({f["provincia"] for f in filas})
     #   - Para la fecha: datetime.now().strftime("%Y-%m-%d %H:%M")
     #   - Podés agregar más claves si querés (suma puntos en la rúbrica).
-    raise NotImplementedError("TODO 11: implementá construir_resumen()")
+    fecha_generado = datetime.now().strftime("%Y-%m-%d %H:%M")
+    anios = [fila["anio"] for fila in filas]
+    valores_musd = [fila["valor_musd"] for fila in filas]
+    provincias_dict = {fila["provincia"] for fila in filas}
+
+    resumen = {
+        "dataset": "Exportaciones de Chaco, Corrientes, Formosa y Misiones por país de destino y por rubro, 1993–2024, en millones de dólares",
+        "fuente": "API datos.gob.ar (INDEC)",
+        "unidad": "millones de dólares FOB",
+        "generado": fecha_generado,
+        "filas": len(filas),
+        "columnas": len(filas[0]),
+        "periodo": {
+            "desde": min(anios),
+            "hasta": max(anios),
+        },
+        "provincias": sorted(provincias_dict),
+        "valor_musd": {
+          "minimo": min(valores_musd),
+          "maximo": max(valores_musd),
+          "promedio": round(sum(valores_musd) / len(valores_musd), 2),
+        },
+        "quality_checks": detalle_checks
+    }
+
+    return resumen
     # ---------------------------------------------------------------------
 
 
-def guardar_resumen(resumen, carpeta=None, nombre=None):
+def guardar_resumen(resumen, carpeta = None, nombre = None):
     """Escribe el resumen en JSON, legible por humanos y por programas.
 
     Acordate de los dos argumentos que vimos: ensure_ascii=False para que
@@ -183,7 +226,13 @@ def guardar_resumen(resumen, carpeta=None, nombre=None):
     """
     # TODO 12a ------------------------------------------------------------
     # Muy parecido a guardar_csv(), pero con json.dump().
-    raise NotImplementedError("TODO 12a: implementá guardar_resumen()")
+    carpeta = carpeta or config.DIR_PROCESSED
+    nombre = nombre or config.ARCHIVO_SALIDA_JSON
+    os.makedirs(carpeta, exist_ok=True)
+    ruta = os.path.join(carpeta, nombre)
+
+    with open(ruta, "w", encoding="utf-8") as f:
+        json.dump(resumen, f, ensure_ascii=False, indent=2)
     # ---------------------------------------------------------------------
 
 
@@ -196,7 +245,21 @@ def escribir_log_corrida(resumen, carpeta=None, nombre=None):
         2026-08-02 14:30 | OK | 1408 filas | 1993-2024
     """
     # TODO 12b ------------------------------------------------------------
-    raise NotImplementedError("TODO 12b: implementá escribir_log_corrida()")
+    todos_ok = all(check["estado"] == "OK" for check in resumen["quality_checks"])
+    estado = "OK" if todos_ok else "FAIL"
+    fecha = resumen["generado"]
+    filas = resumen["filas"]
+    periodo = f"{resumen["periodo"]["desde"]}-{resumen["periodo"]["hasta"]}"
+
+    linea = f"{fecha} | {estado} | {filas} filas | {periodo}"
+
+    carpeta = carpeta or config.DIR_PROCESSED
+    nombre = nombre or config.ARCHIVO_LOG
+    os.makedirs(carpeta, exist_ok=True)
+    ruta = os.path.join(carpeta, nombre)
+
+    with open(ruta, "a", encoding="utf-8") as f:
+        f.write(linea + "\n")
     # ---------------------------------------------------------------------
 
 
